@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Survivor - Mystery SAFE Weeks</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Fantasy Survivor League</h1>
+            <h2>Mystery SAFE Weeks System</h2>
+            <p class="subtitle">5 SAFE weeks randomly assigned out of 17 - revealed each Monday at 10 PM ET</p>
+        </header>
+
+        <section class="countdown">
+            <div id="next-reveal">
+                <h3>Next Reveal:</h3>
+                <p id="countdown-timer"></p>
+            </div>
+        </section>
+
+        <section class="results">
+            <h3>Week Results</h3>
+            <div class="table-container">
+                <table id="results-table">
+                    <thead>
+                        <tr>
+                            <th>Week</th>
+                            <th>Status</th>
+                            <th>Seed Used</th>
+                            <th>Hash (first 8 chars)</th>
+                            <th>Threshold Met</th>
+                            <th>Revealed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body">
+                        <!-- Results will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="info">
+            <h3>How It Works</h3>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h4>Progressive Draw</h4>
+                    <p>Each week, we use the official MNF kickoff time as a seed. The probability of SAFE decreases as weeks pass and safes are used.</p>
+                </div>
+                <div class="info-card">
+                    <h4>Verifiable</h4>
+                    <p>All seeds are published upfront with SHA-256 commitment. Anyone can verify results using the same algorithm.</p>
+                </div>
+                <div class="info-card">
+                    <h4>Automatic Reveal</h4>
+                    <p>Results are automatically revealed each Monday at 10 PM ET, just before Monday Night Football.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats">
+            <h3>Season Stats</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="safe-count">0</div>
+                    <div class="stat-label">SAFE Weeks Used</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="safe-remaining">5</div>
+                    <div class="stat-label">SAFE Weeks Remaining</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="weeks-remaining">17</div>
+                    <div class="stat-label">Weeks Remaining</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="current-probability">29.4%</div>
+                    <div class="stat-label">Current SAFE Probability</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="verification">
+            <h3>Verify Results Yourself</h3>
+            <p>Download the <a href="seeds.json" download>seeds.json</a> file and check the SHA-256 commitment.</p>
+            <p>Each week's result can be verified by hashing the seed and comparing against the threshold.</p>
+            <button id="verify-button" onclick="showVerificationDetails()">Show Verification Details</button>
+            <div id="verification-details" class="hidden">
+                <h4>Verification Steps:</h4>
+                <ol>
+                    <li>Take the seed string for the week</li>
+                    <li>Calculate SHA-256 hash</li>
+                    <li>Convert hash to 256-bit integer</li>
+                    <li>Calculate threshold: (remaining_safes × 2^256) ÷ remaining_weeks</li>
+                    <li>If hash < threshold → SAFE, otherwise CHOP</li>
+                </ol>
+            </div>
+        </section>
+    </div>
+
+    <script src="survivor.js"></script>
+</body>
+</html>
