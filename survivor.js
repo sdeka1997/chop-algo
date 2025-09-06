@@ -30,6 +30,8 @@ class SurvivorSystem {
 
     async loadDemoData() {
         console.log('Loading demo data...');
+        // Override shouldRevealWeek for demo mode
+        this.demoMode = true;
         // Simulate first 3 weeks being revealed for demo purposes
         for (let week = 1; week <= 3; week++) {
             await this.revealWeek(week);
@@ -98,6 +100,11 @@ class SurvivorSystem {
 
     // Reveal at 7 PM Eastern each Monday
     shouldRevealWeek(week) {
+        // Demo mode shows first 3 weeks as revealed
+        if (this.demoMode) {
+            return week <= 3;
+        }
+        
         const now = new Date();
         
         // Calculate the Monday 7 PM ET reveal time for this week
@@ -174,13 +181,15 @@ class SurvivorSystem {
                     <td class="pending">⏳</td>
                 `;
             } else {
+                // Show seed for transparency, but hide results until reveal
+                const seed = this.seeds && this.seeds.weeks[week] ? this.seeds.weeks[week] : 'Loading...';
                 row.innerHTML = `
                     <td>${week}</td>
                     <td class="unknown">?</td>
+                    <td class="seed">${seed}</td>
                     <td>-</td>
                     <td>-</td>
-                    <td>-</td>
-                    <td class="not-revealed">-</td>
+                    <td class="not-revealed">Pending</td>
                 `;
             }
             
