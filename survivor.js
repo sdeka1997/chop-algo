@@ -3,7 +3,7 @@
 
 class SurvivorSystem {
     constructor() {
-        this.totalWeeks = 16;
+        this.totalWeeks = 17;
         this.totalSafes = 5;
         this.currentWeek = 1;
         this.safesUsed = 0;
@@ -15,27 +15,10 @@ class SurvivorSystem {
 
     async init() {
         await this.loadSeeds();
-        
-        // Check if we're in demo mode (URL parameter)
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('demo') === 'true') {
-            await this.loadDemoData();
-        }
-        
         this.renderTable();
         this.updateStats();
         this.startCountdown();
         this.checkForNewReveal();
-    }
-
-    async loadDemoData() {
-        console.log('Loading demo data...');
-        // Override shouldRevealWeek for demo mode
-        this.demoMode = true;
-        // Simulate first 3 weeks being revealed for demo purposes
-        for (let week = 1; week <= 3; week++) {
-            await this.revealWeek(week);
-        }
     }
 
     async loadSeeds() {
@@ -98,38 +81,26 @@ class SurvivorSystem {
         };
     }
 
-    // Reveal at 7 PM Eastern each Monday
+    // Manual reveal only - no automatic timing
     shouldRevealWeek(week) {
-        // Demo mode shows first 3 weeks as revealed
-        if (this.demoMode) {
-            return week <= 3;
-        }
-        
-        const now = new Date();
-        
-        // Calculate the Monday 7 PM ET reveal time for this week
-        // Week 1 starts September 8, 2025 (first Monday)
-        const seasonStart = new Date('2025-09-08T19:00:00-04:00'); // 7 PM ET
-        const weekRevealTime = new Date(seasonStart);
-        weekRevealTime.setDate(seasonStart.getDate() + (week - 1) * 7);
-        
-        return now >= weekRevealTime;
+        // Only manual reveals via the input system
+        return false;
     }
 
-    async revealWeek(week) {
+    async revealWeek(week, lowestScore) {
         if (!this.seeds || !this.seeds.weeks[week]) return null;
 
-        const seed = this.seeds.weeks[week];
-        const result = await this.calculateWeekResult(week, seed);
+        // Append lowest score to seed for unpredictability
+        const baseSeed = this.seeds.weeks[week];
+        const fullSeed = `${baseSeed}_LOWEST_SCORE_${lowestScore}`;
+        const result = await this.calculateWeekResult(week, fullSeed);
         
         const weekResult = {
             week,
-            seed,
+            baseSeed,
+            lowestScore,
+            fullSeed,
             isSafe: result.isSafe,
-            hash: result.hash,
-            hashShort: result.hash ? result.hash.substring(0, 8) : '',
-            threshold: result.threshold ? result.threshold.toString() : '',
-            probability: result.probability,
             revealed: true,
             revealDate: new Date().toISOString()
         };
@@ -160,41 +131,48 @@ class SurvivorSystem {
             const row = document.createElement('tr');
             const result = this.results[week - 1];
             
-            if (result && result.revealed) {
+            if (week === 17) {
+                // Week 17 is always CHOP (Championship)
+                row.innerHTML = `
+                    <td>${week}</td>
+                    <td class="chop">CHOP (Championship)</td>
+                    <td class="revealed">Always</td>
+                `;
+            } else if (result && result.revealed) {
                 row.innerHTML = `
                     <td>${week}</td>
                     <td class="${result.isSafe ? 'safe' : 'chop'}">${result.isSafe ? 'SAFE' : 'CHOP'}</td>
-                    <td class="seed">${result.seed}</td>
-                    <td class="hash">${result.hashShort}...</td>
-                    <td class="${result.isSafe ? 'yes' : 'no'}">${result.isSafe ? 'Yes' : 'No'}</td>
                     <td class="revealed">✓</td>
                 `;
-            } else if (this.shouldRevealWeek(week)) {
-                // Should be revealed but isn't yet - trigger reveal
-                this.revealWeek(week).then(() => this.renderTable());
-                row.innerHTML = `
-                    <td>${week}</td>
-                    <td class="pending">Revealing...</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td class="pending">⏳</td>
-                `;
             } else {
-                // Show seed for transparency, but hide results until reveal
-                const seed = this.seeds && this.seeds.weeks[week] ? this.seeds.weeks[week] : 'Loading...';
                 row.innerHTML = `
                     <td>${week}</td>
                     <td class="unknown">?</td>
-                    <td class="seed">${seed}</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td class="not-revealed">Pending</td>
+                    <td class="not-revealed">-</td>
                 `;
             }
             
             tbody.appendChild(row);
         }
+        
+        // Update current week in input section
+        const currentWeek = this.getCurrentWeek();
+        const inputSection = document.getElementById('input-section');
+        const currentWeekSpan = document.getElementById('current-week');
+        
+        if (currentWeek <= 16) { // Only show input for weeks 1-16
+            currentWeekSpan.textContent = currentWeek;
+            inputSection.style.display = 'block';
+        } else {
+            inputSection.style.display = 'none';
+        }
+    }
+
+    getCurrentWeek() {
+        // Return the next week that needs to be revealed (only weeks 1-16)
+        const revealedCount = this.results.filter(r => r && r.revealed).length;
+        const nextWeek = revealedCount + 1;
+        return nextWeek <= 16 ? nextWeek : 17; // Cap at 17 for display
     }
 
     updateStats() {
@@ -274,6 +252,39 @@ class SurvivorSystem {
 }
 
 // Global functions
+async function submitLowestScore() {
+    const input = document.getElementById('lowest-score');
+    const lowestScore = parseFloat(input.value);
+    
+    if (!lowestScore || lowestScore < 0) {
+        alert('Please enter a valid score (e.g., 85.4)');
+        return;
+    }
+    
+    const currentWeek = window.survivorSystem.getCurrentWeek();
+    if (currentWeek > 16) {
+        alert('All weeks revealed! Season complete.');
+        return;
+    }
+    
+    // Reveal the week with this lowest score
+    const result = await window.survivorSystem.revealWeek(currentWeek, lowestScore);
+    
+    if (result) {
+        // Update display
+        window.survivorSystem.renderTable();
+        window.survivorSystem.updateStats();
+        
+        // Clear input
+        input.value = '';
+        
+        // Show result
+        const status = result.isSafe ? 'SAFE' : 'CHOP';
+        const statusClass = result.isSafe ? 'safe-text' : 'chop-text';
+        alert(`Week ${currentWeek} Result: ${status}!`);
+    }
+}
+
 function showVerificationDetails() {
     const details = document.getElementById('verification-details');
     details.classList.toggle('hidden');

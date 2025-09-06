@@ -21,6 +21,15 @@
             </div>
         </section>
 
+        <section class="input-section" id="input-section">
+            <h3>Reveal This Week's Result</h3>
+            <div class="input-container">
+                <label for="lowest-score">Enter the lowest score from Week <span id="current-week">1</span>:</label>
+                <input type="number" id="lowest-score" placeholder="e.g. 85.4" step="0.1" min="0">
+                <button id="submit-score" onclick="submitLowestScore()">Reveal Week Result</button>
+            </div>
+        </section>
+
         <section class="results">
             <h3>Week Results</h3>
             <div class="table-container">
@@ -29,9 +38,6 @@
                         <tr>
                             <th>Week</th>
                             <th>Status</th>
-                            <th>Seed Used</th>
-                            <th>Hash (first 8 chars)</th>
-                            <th>Threshold Met</th>
                             <th>Revealed</th>
                         </tr>
                     </thead>
