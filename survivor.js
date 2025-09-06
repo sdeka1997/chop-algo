@@ -15,10 +15,25 @@ class SurvivorSystem {
 
     async init() {
         await this.loadSeeds();
+        
+        // Check if we're in demo mode (URL parameter)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('demo') === 'true') {
+            await this.loadDemoData();
+        }
+        
         this.renderTable();
         this.updateStats();
         this.startCountdown();
         this.checkForNewReveal();
+    }
+
+    async loadDemoData() {
+        console.log('Loading demo data...');
+        // Simulate first 3 weeks being revealed for demo purposes
+        for (let week = 1; week <= 3; week++) {
+            await this.revealWeek(week);
+        }
     }
 
     async loadSeeds() {
@@ -81,24 +96,17 @@ class SurvivorSystem {
         };
     }
 
-    // Check if it's time to reveal the current week
+    // Reveal at 7 PM Eastern each Monday
     shouldRevealWeek(week) {
         const now = new Date();
-        const currentYear = now.getFullYear();
         
-        // Calculate the Monday 8 PM ET reveal time for this week
-        // For demo purposes, using a simple week-based calculation
-        // In production, you'd use actual NFL schedule dates
-        const weekStart = new Date(currentYear, 8, 5); // Season start (adjust as needed)
-        weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
+        // Calculate the Monday 7 PM ET reveal time for this week
+        // Week 1 starts September 8, 2025 (first Monday)
+        const seasonStart = new Date('2025-09-08T19:00:00-04:00'); // 7 PM ET
+        const weekRevealTime = new Date(seasonStart);
+        weekRevealTime.setDate(seasonStart.getDate() + (week - 1) * 7);
         
-        // Find the Monday of that week
-        const monday = new Date(weekStart);
-        const daysToMonday = (8 - weekStart.getDay()) % 7;
-        monday.setDate(monday.getDate() + daysToMonday);
-        monday.setHours(20, 0, 0, 0); // 8 PM ET
-        
-        return now >= monday;
+        return now >= weekRevealTime;
     }
 
     async revealWeek(week) {
@@ -202,13 +210,12 @@ class SurvivorSystem {
         
         if (nextWeek > this.totalWeeks) return null;
 
-        // Calculate next Monday 8 PM ET
-        const nextMonday = new Date(now);
-        const daysUntilMonday = (8 - now.getDay()) % 7 || 7;
-        nextMonday.setDate(now.getDate() + daysUntilMonday);
-        nextMonday.setHours(20, 0, 0, 0);
+        // Calculate next Monday 7 PM ET reveal time
+        const seasonStart = new Date('2025-09-08T19:00:00-04:00'); // 7 PM ET
+        const nextRevealTime = new Date(seasonStart);
+        nextRevealTime.setDate(seasonStart.getDate() + (nextWeek - 1) * 7);
 
-        return nextMonday;
+        return nextRevealTime;
     }
 
     startCountdown() {
