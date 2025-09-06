@@ -3,7 +3,7 @@
 
 class SurvivorSystem {
     constructor() {
-        this.totalWeeks = 17;
+        this.totalWeeks = 16;
         this.totalSafes = 5;
         this.currentWeek = 1;
         this.safesUsed = 0;
