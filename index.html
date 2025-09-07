@@ -9,26 +9,12 @@
 <body>
     <div class="container">
         <header>
-            <h1>Fantasy Survivor League</h1>
-            <h2>Mystery SAFE Weeks System</h2>
-            <p class="subtitle">5 SAFE weeks randomly assigned out of 16 - Week 17 is always CHOP (Championship)</p>
+            <h1>Ming Dynasty Chop League</h1>
+            <h2>Safe Week Reveal</h2>
+            <p class="subtitle">18 weeks, 13 teams, 12 chops, 5 safe weeks, 1 champion</p>
         </header>
 
-        <section class="countdown">
-            <div id="next-reveal">
-                <h3>Next Reveal:</h3>
-                <p id="countdown-timer"></p>
-            </div>
-        </section>
 
-        <section class="input-section" id="input-section">
-            <h3>Reveal This Week's Result</h3>
-            <div class="input-container">
-                <label for="lowest-score">Enter the lowest score from Week <span id="current-week">1</span>:</label>
-                <input type="number" id="lowest-score" placeholder="e.g. 85.4" step="0.1" min="0">
-                <button id="submit-score" onclick="submitLowestScore()">Reveal Week Result</button>
-            </div>
-        </section>
 
         <section class="results">
             <h3>Week Results</h3>
@@ -38,7 +24,6 @@
                         <tr>
                             <th>Week</th>
                             <th>Status</th>
-                            <th>Revealed</th>
                         </tr>
                     </thead>
                     <tbody id="results-body">
@@ -60,8 +45,8 @@
                     <p>All seeds are published upfront with SHA-256 commitment. Anyone can verify results using the same algorithm.</p>
                 </div>
                 <div class="info-card">
-                    <h4>Automatic Reveal</h4>
-                    <p>Results are automatically revealed each Monday at 10 PM ET, just before Monday Night Football.</p>
+                    <h4>Reveal</h4>
+                    <p>Results are revealed after inputting the lowest score of the week so that it can be appended to the seed.</p>
                 </div>
             </div>
         </section>
@@ -92,7 +77,6 @@
             <h3>Verify Results Yourself</h3>
             <p>Download the <a href="seeds.json" download>seeds.json</a> file and check the SHA-256 commitment.</p>
             <p>Each week's result can be verified by hashing the seed and comparing against the threshold.</p>
-            <p><a href="?demo=true" style="color: #667eea;">🎯 View Demo Mode</a> (shows sample results)</p>
             <button id="verify-button" onclick="showVerificationDetails()">Show Verification Details</button>
             <div id="verification-details" class="hidden">
                 <h4>Verification Steps:</h4>
@@ -107,6 +91,7 @@
         </section>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="survivor.js"></script>
 </body>
 </html>

@@ -1,6 +1,20 @@
 // Fantasy Survivor League - Mystery SAFE Weeks System
 // Progressive draw algorithm with SHA-256 hashing for verifiable randomness
 
+// Supabase configuration
+const SUPABASE_URL = 'https://fryzvuftyimdagfahdjv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZyeXp2dWZ0eWltZGFnZmFoZGp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcyMDExNjAsImV4cCI6MjA3Mjc3NzE2MH0.QFjKIfxlzLv9R-zLdXm1mM7H_BzZmBNJ3EXZJ52sEB4';
+
+// Initialize Supabase client (wait for CDN to load)
+let supabase;
+function initSupabase() {
+    if (window.supabase && window.supabase.createClient) {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return true;
+    }
+    return false;
+}
+
 class SurvivorSystem {
     constructor() {
         this.totalWeeks = 17;
@@ -14,11 +28,17 @@ class SurvivorSystem {
     }
 
     async init() {
+        // Wait for Supabase to load
+        if (!initSupabase()) {
+            console.log('Waiting for Supabase to load...');
+            setTimeout(() => this.init(), 100);
+            return;
+        }
+        
         await this.loadSeeds();
+        await this.loadResults();
         this.renderTable();
         this.updateStats();
-        this.startCountdown();
-        this.checkForNewReveal();
     }
 
     async loadSeeds() {
@@ -28,6 +48,67 @@ class SurvivorSystem {
             console.log('Seeds loaded with commitment:', this.seeds.commitment);
         } catch (error) {
             console.error('Could not load seeds:', error);
+        }
+    }
+
+    async loadResults() {
+        try {
+            const { data, error } = await supabase
+                .from('results')
+                .select('*')
+                .order('week');
+            
+            if (error) {
+                console.error('Database error:', error);
+                return;
+            }
+            
+            console.log('Raw database response:', data);
+            
+            // Convert database results to our results format
+            data.forEach(row => {
+                const weekIndex = row.week - 1;
+                this.results[weekIndex] = {
+                    week: row.week,
+                    baseSeed: this.seeds?.weeks?.[row.week] || '',
+                    lowestScore: row.lowest_score,
+                    fullSeed: `${this.seeds?.weeks?.[row.week] || ''}_LOWEST_SCORE_${row.lowest_score}`,
+                    isSafe: row.is_safe,
+                    revealed: true,
+                    revealDate: row.revealed_at
+                };
+                
+                if (row.is_safe) {
+                    this.safesUsed++;
+                }
+            });
+        } catch (error) {
+            console.error('Could not load results from database:', error);
+        }
+    }
+
+    async saveResult(weekResult) {
+        try {
+            const data = {
+                week: weekResult.week,
+                lowest_score: weekResult.lowestScore,
+                is_safe: weekResult.isSafe,
+                revealed_at: new Date().toISOString()
+            };
+            
+            console.log('Attempting to save:', data);
+            
+            const { error } = await supabase
+                .from('results')
+                .insert([data]);
+            
+            if (error) {
+                console.error('Insert failed:', error);
+            } else {
+                console.log('Successfully saved to database');
+            }
+        } catch (error) {
+            console.error('Could not save result to database:', error);
         }
     }
 
@@ -111,21 +192,28 @@ class SurvivorSystem {
             this.safesUsed++;
         }
 
-        // Save result to results folder (for GitHub Pages)
-        this.saveWeekResult(weekResult);
+        // Save result to database
+        await this.saveResult(weekResult);
         
         return weekResult;
     }
 
     saveWeekResult(weekResult) {
         // In a real implementation, this would save to a file
-        // For now, we'll store in localStorage for demo
+        // Store in localStorage for persistence
         localStorage.setItem(`week_${weekResult.week}_result`, JSON.stringify(weekResult));
+    }
+
+    isAdmin() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('admin') === 'ladysmudge';
     }
 
     renderTable() {
         const tbody = document.getElementById('results-body');
         tbody.innerHTML = '';
+        const currentWeek = this.getCurrentWeek();
+        const isAdmin = this.isAdmin();
 
         for (let week = 1; week <= this.totalWeeks; week++) {
             const row = document.createElement('tr');
@@ -136,43 +224,71 @@ class SurvivorSystem {
                 row.innerHTML = `
                     <td>${week}</td>
                     <td class="chop">CHOP (Championship)</td>
-                    <td class="revealed">Always</td>
                 `;
             } else if (result && result.revealed) {
                 row.innerHTML = `
                     <td>${week}</td>
                     <td class="${result.isSafe ? 'safe' : 'chop'}">${result.isSafe ? 'SAFE' : 'CHOP'}</td>
-                    <td class="revealed">✓</td>
+                `;
+            } else if (week === currentWeek && currentWeek <= 16 && isAdmin) {
+                // Current week gets input field in status column (admin only)
+                row.innerHTML = `
+                    <td>${week}</td>
+                    <td class="input-cell">
+                        <input type="number" id="week-${week}-input" placeholder="e.g. 85.4" step="0.1" min="0" class="inline-input">
+                        <button onclick="submitWeekScore(${week})" class="inline-submit">Reveal</button>
+                    </td>
                 `;
             } else {
                 row.innerHTML = `
                     <td>${week}</td>
                     <td class="unknown">?</td>
-                    <td class="not-revealed">-</td>
                 `;
             }
             
             tbody.appendChild(row);
         }
-        
-        // Update current week in input section
-        const currentWeek = this.getCurrentWeek();
-        const inputSection = document.getElementById('input-section');
-        const currentWeekSpan = document.getElementById('current-week');
-        
-        if (currentWeek <= 16) { // Only show input for weeks 1-16
-            currentWeekSpan.textContent = currentWeek;
-            inputSection.style.display = 'block';
-        } else {
-            inputSection.style.display = 'none';
-        }
     }
 
     getCurrentWeek() {
-        // Return the next week that needs to be revealed (only weeks 1-16)
-        const revealedCount = this.results.filter(r => r && r.revealed).length;
-        const nextWeek = revealedCount + 1;
-        return nextWeek <= 16 ? nextWeek : 17; // Cap at 17 for display
+        const now = new Date();
+        
+        // Week 1 MNF is September 8, 2025, input available starting September 2 (Tuesday before)
+        const weekDates = [
+            new Date('2025-09-02T00:00:00-04:00'), // Week 1 input available Sept 2
+            new Date('2025-09-09T00:00:00-04:00'), // Week 2 input available Sept 9
+            new Date('2025-09-16T00:00:00-04:00'), // Week 3 input available Sept 16
+            new Date('2025-09-23T00:00:00-04:00'), // Week 4 input available Sept 23
+            new Date('2025-09-30T00:00:00-04:00'), // Week 5 input available Sept 30
+            new Date('2025-10-07T00:00:00-04:00'), // Week 6 input available Oct 7
+            new Date('2025-10-14T00:00:00-04:00'), // Week 7 input available Oct 14
+            new Date('2025-10-21T00:00:00-04:00'), // Week 8 input available Oct 21
+            new Date('2025-10-28T00:00:00-04:00'), // Week 9 input available Oct 28
+            new Date('2025-11-04T00:00:00-04:00'), // Week 10 input available Nov 4
+            new Date('2025-11-11T00:00:00-04:00'), // Week 11 input available Nov 11
+            new Date('2025-11-18T00:00:00-04:00'), // Week 12 input available Nov 18
+            new Date('2025-11-25T00:00:00-04:00'), // Week 13 input available Nov 25
+            new Date('2025-12-02T00:00:00-04:00'), // Week 14 input available Dec 2
+            new Date('2025-12-09T00:00:00-04:00'), // Week 15 input available Dec 9
+            new Date('2025-12-16T00:00:00-04:00')  // Week 16 input available Dec 16
+        ];
+        
+        // Find which week's input should be available
+        for (let i = 0; i < weekDates.length; i++) {
+            const week = i + 1;
+            const weekInputDate = weekDates[i];
+            
+            // Check if this week hasn't been revealed yet and the input date has passed
+            const result = this.results[i];
+            const isRevealed = result && result.revealed;
+            
+            if (!isRevealed && now >= weekInputDate) {
+                return week; // Return the first unrevealed week whose input date has passed
+            }
+        }
+        
+        // If no weeks are available for input, return 17 (season complete)
+        return 17;
     }
 
     updateStats() {
@@ -191,97 +307,27 @@ class SurvivorSystem {
         document.getElementById('current-probability').textContent = currentProbability + '%';
     }
 
-    getNextRevealTime() {
-        const now = new Date();
-        const nextWeek = this.results.filter(r => r && r.revealed).length + 1;
-        
-        if (nextWeek > this.totalWeeks) return null;
-
-        // Calculate next Monday 7 PM ET reveal time
-        const seasonStart = new Date('2025-09-08T19:00:00-04:00'); // 7 PM ET
-        const nextRevealTime = new Date(seasonStart);
-        nextRevealTime.setDate(seasonStart.getDate() + (nextWeek - 1) * 7);
-
-        return nextRevealTime;
-    }
-
-    startCountdown() {
-        const updateCountdown = () => {
-            const nextReveal = this.getNextRevealTime();
-            const timer = document.getElementById('countdown-timer');
-            
-            if (!nextReveal) {
-                timer.textContent = 'Season Complete!';
-                return;
-            }
-
-            const now = new Date();
-            const diff = nextReveal.getTime() - now.getTime();
-            
-            if (diff <= 0) {
-                timer.textContent = 'Revealing now...';
-                this.checkForNewReveal();
-                return;
-            }
-
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-            timer.textContent = `${days}d ${hours}h ${minutes}m ${seconds}s`;
-        };
-
-        updateCountdown();
-        setInterval(updateCountdown, 1000);
-    }
-
-    checkForNewReveal() {
-        const revealedCount = this.results.filter(r => r && r.revealed).length;
-        
-        for (let week = revealedCount + 1; week <= this.totalWeeks; week++) {
-            if (this.shouldRevealWeek(week)) {
-                this.revealWeek(week).then(() => {
-                    this.renderTable();
-                    this.updateStats();
-                });
-                break;
-            }
-        }
-    }
 }
 
 // Global functions
-async function submitLowestScore() {
-    const input = document.getElementById('lowest-score');
+async function submitWeekScore(week) {
+    const input = document.getElementById(`week-${week}-input`);
     const lowestScore = parseFloat(input.value);
     
     if (!lowestScore || lowestScore < 0) {
-        alert('Please enter a valid score (e.g., 85.4)');
-        return;
-    }
-    
-    const currentWeek = window.survivorSystem.getCurrentWeek();
-    if (currentWeek > 16) {
-        alert('All weeks revealed! Season complete.');
+        // Briefly highlight input field for invalid input
+        input.style.borderColor = '#dc3545';
+        setTimeout(() => input.style.borderColor = '', 1000);
         return;
     }
     
     // Reveal the week with this lowest score
-    const result = await window.survivorSystem.revealWeek(currentWeek, lowestScore);
+    const result = await window.survivorSystem.revealWeek(week, lowestScore);
     
     if (result) {
-        // Update display
+        // Update display - this will re-render the table and show the result
         window.survivorSystem.renderTable();
         window.survivorSystem.updateStats();
-        
-        // Clear input
-        input.value = '';
-        
-        // Show result
-        const status = result.isSafe ? 'SAFE' : 'CHOP';
-        const statusClass = result.isSafe ? 'safe-text' : 'chop-text';
-        alert(`Week ${currentWeek} Result: ${status}!`);
     }
 }
 
