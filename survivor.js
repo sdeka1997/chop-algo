@@ -23,6 +23,8 @@ class SurvivorSystem {
         this.safesUsed = 0;
         this.results = [];
         this.seeds = null;
+        this.leagueId = "1264279102727135232";
+        this.baseUrl = "https://api.sleeper.app/v1";
         
         this.init();
     }
@@ -111,6 +113,111 @@ class SurvivorSystem {
             }
         } catch (error) {
             console.error('Could not save result to database:', error);
+        }
+    }
+
+    async fetchSleeperData(endpoint) {
+        try {
+            const response = await fetch(`${this.baseUrl}${endpoint}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Sleeper API error:', error);
+            return null;
+        }
+    }
+
+    async getLowestScorerForWeek(week) {
+        try {
+            console.log(`Fetching lowest scorer for week ${week} from Sleeper...`);
+            
+            // Fetch matchups, rosters, and users
+            const [matchups, rosters, users] = await Promise.all([
+                this.fetchSleeperData(`/league/${this.leagueId}/matchups/${week}`),
+                this.fetchSleeperData(`/league/${this.leagueId}/rosters`),
+                this.fetchSleeperData(`/league/${this.leagueId}/users`)
+            ]);
+
+            if (!matchups || !rosters || !users) {
+                console.error('Failed to fetch data from Sleeper API');
+                return null;
+            }
+
+            // Map roster_id -> owner_id -> display/team name
+            const ownerByRoster = {};
+            rosters.forEach(r => {
+                ownerByRoster[r.roster_id] = r.owner_id;
+            });
+
+            const nameByOwner = {};
+            users.forEach(u => {
+                const teamName = u.metadata?.team_name;
+                const displayName = u.display_name;
+                nameByOwner[u.user_id] = teamName || displayName || "Unknown";
+            });
+
+            // Find lowest score
+            let lowest = null;
+            let lowestTeam = null;
+
+            matchups.forEach(team => {
+                const points = parseFloat(team.points || 0);
+                const rosterId = team.roster_id;
+                const ownerId = ownerByRoster[rosterId];
+                const teamName = nameByOwner[ownerId] || `Roster ${rosterId}`;
+
+                if (lowest === null || points < lowest) {
+                    lowest = points;
+                    lowestTeam = teamName;
+                }
+            });
+
+            console.log(`Week ${week} lowest: ${lowestTeam} with ${lowest?.toFixed(1)} points`);
+            return { score: lowest, team: lowestTeam };
+
+        } catch (error) {
+            console.error('Error fetching lowest scorer:', error);
+            return null;
+        }
+    }
+
+
+    getWeekRevealDates() {
+        // Tuesday reveals at 7am ET after each week's games
+        return [
+            new Date('2025-09-09T07:00:00-04:00'), // Week 1 reveal Sept 9
+            new Date('2025-09-16T07:00:00-04:00'), // Week 2 reveal Sept 16
+            new Date('2025-09-23T07:00:00-04:00'), // Week 3 reveal Sept 23
+            new Date('2025-09-30T07:00:00-04:00'), // Week 4 reveal Sept 30
+            new Date('2025-10-07T07:00:00-04:00'), // Week 5 reveal Oct 7
+            new Date('2025-10-14T07:00:00-04:00'), // Week 6 reveal Oct 14
+            new Date('2025-10-21T07:00:00-04:00'), // Week 7 reveal Oct 21
+            new Date('2025-10-28T07:00:00-04:00'), // Week 8 reveal Oct 28
+            new Date('2025-11-04T07:00:00-05:00'), // Week 9 reveal Nov 4 (EST begins)
+            new Date('2025-11-11T07:00:00-05:00'), // Week 10 reveal Nov 11
+            new Date('2025-11-18T07:00:00-05:00'), // Week 11 reveal Nov 18
+            new Date('2025-11-25T07:00:00-05:00'), // Week 12 reveal Nov 25
+            new Date('2025-12-02T07:00:00-05:00'), // Week 13 reveal Dec 2
+            new Date('2025-12-09T07:00:00-05:00'), // Week 14 reveal Dec 9
+            new Date('2025-12-16T07:00:00-05:00'), // Week 15 reveal Dec 16
+            new Date('2025-12-23T07:00:00-05:00')  // Week 16 reveal Dec 23
+        ];
+    }
+
+    async autoRevealWeek(week) {
+        const lowestData = await this.getLowestScorerForWeek(week);
+        if (!lowestData) {
+            console.error(`Could not get lowest scorer data for week ${week}`);
+            return;
+        }
+
+        const result = await this.revealWeek(week, lowestData.score, lowestData.team);
+        if (result) {
+            console.log(`Week ${week} automatically revealed: ${result.isSafe ? 'SAFE' : 'CHOP'}`);
+            this.renderTable();
+            this.updateStats();
         }
     }
 
@@ -211,11 +318,18 @@ class SurvivorSystem {
     renderTable() {
         const tbody = document.getElementById('results-body');
         tbody.innerHTML = '';
+        const now = new Date();
         const currentWeek = this.getCurrentWeek();
 
         for (let week = 1; week <= this.totalWeeks; week++) {
             const row = document.createElement('tr');
             const result = this.results[week - 1];
+            
+            // Add current week highlighting
+            if (week === currentWeek && week <= 16) {
+                row.style.backgroundColor = '#fff3cd';
+                row.style.fontWeight = 'bold';
+            }
             
             if (week === 17) {
                 // Week 17 is always CHOP (Championship)
@@ -232,27 +346,28 @@ class SurvivorSystem {
                     <td>${result.lowestScorer || ''}</td>
                     <td class="${result.isSafe ? 'safe' : 'chop'}">${result.isSafe ? 'SAFE' : 'CHOP'}</td>
                 `;
-            } else if (week === currentWeek && currentWeek <= 16) {
-                // Current week gets input fields in respective columns (available to everyone)
-                row.innerHTML = `
-                    <td>${week}</td>
-                    <td>
-                        <input type="number" id="week-${week}-score" placeholder="85.4" step="0.1" min="0" class="inline-input">
-                    </td>
-                    <td>
-                        <input type="text" id="week-${week}-scorer" placeholder="Name" class="inline-input-text">
-                    </td>
-                    <td>
-                        <button onclick="submitWeekScore(${week})" class="inline-submit">Reveal</button>
-                    </td>
-                `;
             } else {
-                row.innerHTML = `
-                    <td>${week}</td>
-                    <td class="unknown">?</td>
-                    <td class="unknown">?</td>
-                    <td class="unknown">?</td>
-                `;
+                // Check if this week can be revealed (it's 10am ET on the reveal Tuesday)
+                const revealDates = this.getWeekRevealDates();
+                const canReveal = week <= 16 && now >= revealDates[week - 1];
+                
+                if (canReveal) {
+                    row.innerHTML = `
+                        <td>${week}</td>
+                        <td class="unknown">?</td>
+                        <td class="unknown">?</td>
+                        <td class="unknown">
+                            <button onclick="revealWeekFromSleeper(${week})" class="inline-submit">Reveal</button>
+                        </td>
+                    `;
+                } else {
+                    row.innerHTML = `
+                        <td>${week}</td>
+                        <td class="unknown">?</td>
+                        <td class="unknown">?</td>
+                        <td class="unknown">?</td>
+                    `;
+                }
             }
             
             tbody.appendChild(row);
@@ -260,43 +375,15 @@ class SurvivorSystem {
     }
 
     getCurrentWeek() {
-        const now = new Date();
-        
-        // Week 1 MNF is September 8, 2025, input available starting September 3 (Wednesday before)
-        const weekDates = [
-            new Date('2025-09-03T00:00:00-04:00'), // Week 1 input available Sept 3
-            new Date('2025-09-10T00:00:00-04:00'), // Week 2 input available Sept 10
-            new Date('2025-09-17T00:00:00-04:00'), // Week 3 input available Sept 17
-            new Date('2025-09-24T00:00:00-04:00'), // Week 4 input available Sept 24
-            new Date('2025-10-01T00:00:00-04:00'), // Week 5 input available Oct 1
-            new Date('2025-10-08T00:00:00-04:00'), // Week 6 input available Oct 8
-            new Date('2025-10-15T00:00:00-04:00'), // Week 7 input available Oct 15
-            new Date('2025-10-22T00:00:00-04:00'), // Week 8 input available Oct 22
-            new Date('2025-10-29T00:00:00-04:00'), // Week 9 input available Oct 29
-            new Date('2025-11-05T00:00:00-04:00'), // Week 10 input available Nov 5
-            new Date('2025-11-12T00:00:00-04:00'), // Week 11 input available Nov 12
-            new Date('2025-11-19T00:00:00-04:00'), // Week 12 input available Nov 19
-            new Date('2025-11-26T00:00:00-04:00'), // Week 13 input available Nov 26
-            new Date('2025-12-03T00:00:00-04:00'), // Week 14 input available Dec 3
-            new Date('2025-12-10T00:00:00-04:00'), // Week 15 input available Dec 10
-            new Date('2025-12-17T00:00:00-04:00')  // Week 16 input available Dec 17
-        ];
-        
-        // Find which week's input should be available
-        for (let i = 0; i < weekDates.length; i++) {
-            const week = i + 1;
-            const weekInputDate = weekDates[i];
-            
-            // Check if this week hasn't been revealed yet and the input date has passed
-            const result = this.results[i];
-            const isRevealed = result && result.revealed;
-            
-            if (!isRevealed && now >= weekInputDate) {
-                return week; // Return the first unrevealed week whose input date has passed
+        // Find the first unrevealed week (1-16)
+        for (let week = 1; week <= 16; week++) {
+            const result = this.results[week - 1];
+            if (!result || !result.revealed) {
+                return week;
             }
         }
         
-        // If no weeks are available for input, return 17 (season complete)
+        // If all weeks 1-16 are revealed, season complete
         return 17;
     }
 
@@ -319,49 +406,10 @@ class SurvivorSystem {
 }
 
 // Global functions
-async function submitWeekScore(week) {
-    const scoreInput = document.getElementById(`week-${week}-score`);
-    const scorerInput = document.getElementById(`week-${week}-scorer`);
-    
-    const lowestScore = parseFloat(scoreInput.value);
-    const lowestScorer = scorerInput.value.trim();
-    
-    // Validate both fields are filled
-    if (!lowestScore || lowestScore < 0) {
-        scoreInput.style.borderColor = '#dc3545';
-        setTimeout(() => scoreInput.style.borderColor = '', 1000);
-        return;
-    }
-    
-    if (!lowestScorer) {
-        scorerInput.style.borderColor = '#dc3545';
-        setTimeout(() => scorerInput.style.borderColor = '', 1000);
-        return;
-    }
-    
-    // Confirmation popup
-    const confirmMessage = `⚠️ CONFIRMATION REQUIRED ⚠️\n\n` +
-                          `Are you the lowest scorer for Week ${week}?\n\n` +
-                          `Score: ${lowestScore}\n` +
-                          `Name: ${lowestScorer}\n\n` +
-                          `WARNING: This will write to the database and reveal the week's result.\n\n` +
-                          `Only click OK if:\n` +
-                          `• You are the lowest scorer for this week\n` +
-                          `• You are entering your actual score\n` +
-                          `• You understand this cannot be undone\n\n` +
-                          `Click OK to proceed or Cancel to abort.`;
-    
-    if (!confirm(confirmMessage)) {
-        return; // User cancelled
-    }
-    
-    // Reveal the week with this lowest score and scorer
-    const result = await window.survivorSystem.revealWeek(week, lowestScore, lowestScorer);
-    
+async function revealWeekFromSleeper(week) {
+    const result = await window.survivorSystem.autoRevealWeek(week);
     if (result) {
-        // Update display - this will re-render the table and show the result
-        window.survivorSystem.renderTable();
-        window.survivorSystem.updateStats();
+        console.log(`Week ${week} revealed from Sleeper API`);
     }
 }
 
