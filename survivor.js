@@ -72,6 +72,7 @@ class SurvivorSystem {
                     week: row.week,
                     baseSeed: this.seeds?.weeks?.[row.week] || '',
                     lowestScore: row.lowest_score,
+                    lowestScorer: row.lowest_scorer,
                     fullSeed: `${this.seeds?.weeks?.[row.week] || ''}_LOWEST_SCORE_${row.lowest_score}`,
                     isSafe: row.is_safe,
                     revealed: true,
@@ -92,6 +93,7 @@ class SurvivorSystem {
             const data = {
                 week: weekResult.week,
                 lowest_score: weekResult.lowestScore,
+                lowest_scorer: weekResult.lowestScorer,
                 is_safe: weekResult.isSafe,
                 revealed_at: new Date().toISOString()
             };
@@ -168,7 +170,7 @@ class SurvivorSystem {
         return false;
     }
 
-    async revealWeek(week, lowestScore) {
+    async revealWeek(week, lowestScore, lowestScorer) {
         if (!this.seeds || !this.seeds.weeks[week]) return null;
 
         // Append lowest score to seed for unpredictability
@@ -180,6 +182,7 @@ class SurvivorSystem {
             week,
             baseSeed,
             lowestScore,
+            lowestScorer,
             fullSeed,
             isSafe: result.isSafe,
             revealed: true,
@@ -204,16 +207,11 @@ class SurvivorSystem {
         localStorage.setItem(`week_${weekResult.week}_result`, JSON.stringify(weekResult));
     }
 
-    isAdmin() {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('admin') === 'ladysmudge';
-    }
 
     renderTable() {
         const tbody = document.getElementById('results-body');
         tbody.innerHTML = '';
         const currentWeek = this.getCurrentWeek();
-        const isAdmin = this.isAdmin();
 
         for (let week = 1; week <= this.totalWeeks; week++) {
             const row = document.createElement('tr');
@@ -223,25 +221,36 @@ class SurvivorSystem {
                 // Week 17 is always CHOP (Championship)
                 row.innerHTML = `
                     <td>${week}</td>
+                    <td>-</td>
+                    <td>-</td>
                     <td class="chop">CHOP (Championship)</td>
                 `;
             } else if (result && result.revealed) {
                 row.innerHTML = `
                     <td>${week}</td>
+                    <td>${result.lowestScore}</td>
+                    <td>${result.lowestScorer || ''}</td>
                     <td class="${result.isSafe ? 'safe' : 'chop'}">${result.isSafe ? 'SAFE' : 'CHOP'}</td>
                 `;
-            } else if (week === currentWeek && currentWeek <= 16 && isAdmin) {
-                // Current week gets input field in status column (admin only)
+            } else if (week === currentWeek && currentWeek <= 16) {
+                // Current week gets input fields in respective columns (available to everyone)
                 row.innerHTML = `
                     <td>${week}</td>
-                    <td class="input-cell">
-                        <input type="number" id="week-${week}-input" placeholder="e.g. 85.4" step="0.1" min="0" class="inline-input">
+                    <td>
+                        <input type="number" id="week-${week}-score" placeholder="85.4" step="0.1" min="0" class="inline-input">
+                    </td>
+                    <td>
+                        <input type="text" id="week-${week}-scorer" placeholder="Name" class="inline-input-text">
+                    </td>
+                    <td>
                         <button onclick="submitWeekScore(${week})" class="inline-submit">Reveal</button>
                     </td>
                 `;
             } else {
                 row.innerHTML = `
                     <td>${week}</td>
+                    <td class="unknown">?</td>
+                    <td class="unknown">?</td>
                     <td class="unknown">?</td>
                 `;
             }
@@ -253,24 +262,24 @@ class SurvivorSystem {
     getCurrentWeek() {
         const now = new Date();
         
-        // Week 1 MNF is September 8, 2025, input available starting September 2 (Tuesday before)
+        // Week 1 MNF is September 8, 2025, input available starting September 3 (Wednesday before)
         const weekDates = [
-            new Date('2025-09-02T00:00:00-04:00'), // Week 1 input available Sept 2
-            new Date('2025-09-09T00:00:00-04:00'), // Week 2 input available Sept 9
-            new Date('2025-09-16T00:00:00-04:00'), // Week 3 input available Sept 16
-            new Date('2025-09-23T00:00:00-04:00'), // Week 4 input available Sept 23
-            new Date('2025-09-30T00:00:00-04:00'), // Week 5 input available Sept 30
-            new Date('2025-10-07T00:00:00-04:00'), // Week 6 input available Oct 7
-            new Date('2025-10-14T00:00:00-04:00'), // Week 7 input available Oct 14
-            new Date('2025-10-21T00:00:00-04:00'), // Week 8 input available Oct 21
-            new Date('2025-10-28T00:00:00-04:00'), // Week 9 input available Oct 28
-            new Date('2025-11-04T00:00:00-04:00'), // Week 10 input available Nov 4
-            new Date('2025-11-11T00:00:00-04:00'), // Week 11 input available Nov 11
-            new Date('2025-11-18T00:00:00-04:00'), // Week 12 input available Nov 18
-            new Date('2025-11-25T00:00:00-04:00'), // Week 13 input available Nov 25
-            new Date('2025-12-02T00:00:00-04:00'), // Week 14 input available Dec 2
-            new Date('2025-12-09T00:00:00-04:00'), // Week 15 input available Dec 9
-            new Date('2025-12-16T00:00:00-04:00')  // Week 16 input available Dec 16
+            new Date('2025-09-03T00:00:00-04:00'), // Week 1 input available Sept 3
+            new Date('2025-09-10T00:00:00-04:00'), // Week 2 input available Sept 10
+            new Date('2025-09-17T00:00:00-04:00'), // Week 3 input available Sept 17
+            new Date('2025-09-24T00:00:00-04:00'), // Week 4 input available Sept 24
+            new Date('2025-10-01T00:00:00-04:00'), // Week 5 input available Oct 1
+            new Date('2025-10-08T00:00:00-04:00'), // Week 6 input available Oct 8
+            new Date('2025-10-15T00:00:00-04:00'), // Week 7 input available Oct 15
+            new Date('2025-10-22T00:00:00-04:00'), // Week 8 input available Oct 22
+            new Date('2025-10-29T00:00:00-04:00'), // Week 9 input available Oct 29
+            new Date('2025-11-05T00:00:00-04:00'), // Week 10 input available Nov 5
+            new Date('2025-11-12T00:00:00-04:00'), // Week 11 input available Nov 12
+            new Date('2025-11-19T00:00:00-04:00'), // Week 12 input available Nov 19
+            new Date('2025-11-26T00:00:00-04:00'), // Week 13 input available Nov 26
+            new Date('2025-12-03T00:00:00-04:00'), // Week 14 input available Dec 3
+            new Date('2025-12-10T00:00:00-04:00'), // Week 15 input available Dec 10
+            new Date('2025-12-17T00:00:00-04:00')  // Week 16 input available Dec 17
         ];
         
         // Find which week's input should be available
@@ -311,18 +320,43 @@ class SurvivorSystem {
 
 // Global functions
 async function submitWeekScore(week) {
-    const input = document.getElementById(`week-${week}-input`);
-    const lowestScore = parseFloat(input.value);
+    const scoreInput = document.getElementById(`week-${week}-score`);
+    const scorerInput = document.getElementById(`week-${week}-scorer`);
     
+    const lowestScore = parseFloat(scoreInput.value);
+    const lowestScorer = scorerInput.value.trim();
+    
+    // Validate both fields are filled
     if (!lowestScore || lowestScore < 0) {
-        // Briefly highlight input field for invalid input
-        input.style.borderColor = '#dc3545';
-        setTimeout(() => input.style.borderColor = '', 1000);
+        scoreInput.style.borderColor = '#dc3545';
+        setTimeout(() => scoreInput.style.borderColor = '', 1000);
         return;
     }
     
-    // Reveal the week with this lowest score
-    const result = await window.survivorSystem.revealWeek(week, lowestScore);
+    if (!lowestScorer) {
+        scorerInput.style.borderColor = '#dc3545';
+        setTimeout(() => scorerInput.style.borderColor = '', 1000);
+        return;
+    }
+    
+    // Confirmation popup
+    const confirmMessage = `⚠️ CONFIRMATION REQUIRED ⚠️\n\n` +
+                          `Are you the lowest scorer for Week ${week}?\n\n` +
+                          `Score: ${lowestScore}\n` +
+                          `Name: ${lowestScorer}\n\n` +
+                          `WARNING: This will write to the database and reveal the week's result.\n\n` +
+                          `Only click OK if:\n` +
+                          `• You are the lowest scorer for this week\n` +
+                          `• You are entering your actual score\n` +
+                          `• You understand this cannot be undone\n\n` +
+                          `Click OK to proceed or Cancel to abort.`;
+    
+    if (!confirm(confirmMessage)) {
+        return; // User cancelled
+    }
+    
+    // Reveal the week with this lowest score and scorer
+    const result = await window.survivorSystem.revealWeek(week, lowestScore, lowestScorer);
     
     if (result) {
         // Update display - this will re-render the table and show the result
