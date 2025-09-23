@@ -129,10 +129,27 @@ class SurvivorSystem {
         }
     }
 
+    getEliminatedTeams() {
+        const eliminatedTeams = new Set();
+
+        // Look through all revealed results for CHOP weeks
+        this.results.forEach(result => {
+            if (result && result.revealed && !result.isSafe && result.lowestScorer) {
+                eliminatedTeams.add(result.lowestScorer);
+            }
+        });
+
+        return eliminatedTeams;
+    }
+
     async getLowestScorerForWeek(week) {
         try {
             console.log(`Fetching lowest scorer for week ${week} from Sleeper...`);
-            
+
+            // Get eliminated teams from previous CHOP weeks
+            const eliminatedTeams = this.getEliminatedTeams();
+            console.log('Eliminated teams:', Array.from(eliminatedTeams));
+
             // Fetch matchups, rosters, and users
             const [matchups, rosters, users] = await Promise.all([
                 this.fetchSleeperData(`/league/${this.leagueId}/matchups/${week}`),
@@ -158,7 +175,7 @@ class SurvivorSystem {
                 nameByOwner[u.user_id] = teamName || displayName || "Unknown";
             });
 
-            // Find lowest score
+            // Find lowest score among active (non-eliminated) teams
             let lowest = null;
             let lowestTeam = null;
 
@@ -168,13 +185,19 @@ class SurvivorSystem {
                 const ownerId = ownerByRoster[rosterId];
                 const teamName = nameByOwner[ownerId] || `Roster ${rosterId}`;
 
+                // Skip eliminated teams
+                if (eliminatedTeams.has(teamName)) {
+                    console.log(`Skipping eliminated team: ${teamName} (${points} points)`);
+                    return;
+                }
+
                 if (lowest === null || points < lowest) {
                     lowest = points;
                     lowestTeam = teamName;
                 }
             });
 
-            console.log(`Week ${week} lowest: ${lowestTeam} with ${lowest?.toFixed(1)} points`);
+            console.log(`Week ${week} lowest among active teams: ${lowestTeam} with ${lowest?.toFixed(1)} points`);
             return { score: lowest, team: lowestTeam };
 
         } catch (error) {
