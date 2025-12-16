@@ -371,7 +371,7 @@ class SurvivorSystem {
                         <td>${week}</td>
                         <td>-</td>
                         <td>-</td>
-                        <td class="${week17IsSafe ? 'safe' : 'chop'}">${week17IsSafe ? 'SAFE (Championship)' : 'CHOP (Championship)'}</td>
+                        <td class="${week17IsSafe ? 'safe' : 'chop'}">${week17IsSafe ? 'SAFE' : 'CHOP'}</td>
                     `;
                 } else {
                     // Week 16 not yet revealed, so week 17 is still unknown
