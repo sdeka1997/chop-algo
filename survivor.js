@@ -355,13 +355,33 @@ class SurvivorSystem {
             }
             
             if (week === 17) {
-                // Week 17 is always CHOP (Championship)
-                row.innerHTML = `
-                    <td>${week}</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td class="chop">CHOP (Championship)</td>
-                `;
+                // Week 17 status is determined by weeks 1-16
+                // If week 16 is revealed, we can calculate week 17
+                const week16Result = this.results[15]; // Week 16 is at index 15
+
+                if (week16Result && week16Result.revealed) {
+                    // Count safes used in weeks 1-16
+                    const safesUsedInWeeks1to16 = this.results.slice(0, 16).filter(r => r && r.revealed && r.isSafe).length;
+
+                    // Week 17 is SAFE if only 4 safes were used in weeks 1-16
+                    // (because we need exactly 5 total safes)
+                    const week17IsSafe = safesUsedInWeeks1to16 < this.totalSafes;
+
+                    row.innerHTML = `
+                        <td>${week}</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td class="${week17IsSafe ? 'safe' : 'chop'}">${week17IsSafe ? 'SAFE (Championship)' : 'CHOP (Championship)'}</td>
+                    `;
+                } else {
+                    // Week 16 not yet revealed, so week 17 is still unknown
+                    row.innerHTML = `
+                        <td>${week}</td>
+                        <td class="unknown">?</td>
+                        <td class="unknown">?</td>
+                        <td class="unknown">?</td>
+                    `;
+                }
             } else if (result && result.revealed) {
                 row.innerHTML = `
                     <td>${week}</td>
