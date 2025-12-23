@@ -64,9 +64,15 @@ class SurvivorSystem {
                 console.error('Database error:', error);
                 return;
             }
-            
+
             console.log('Raw database response:', data);
-            
+
+            // Check if data exists before processing
+            if (!data || data.length === 0) {
+                console.log('No results found in database');
+                return;
+            }
+
             // Convert database results to our results format
             data.forEach(row => {
                 const weekIndex = row.week - 1;
