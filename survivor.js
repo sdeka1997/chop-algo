@@ -43,6 +43,14 @@ class SurvivorSystem {
         this.updateStats();
     }
 
+    showDebugMessage(message) {
+        const debugDiv = document.getElementById('debug-message');
+        if (debugDiv) {
+            debugDiv.textContent = message;
+            debugDiv.style.display = 'block';
+        }
+    }
+
     async loadSeeds() {
         try {
             const response = await fetch('seeds.json');
@@ -50,6 +58,7 @@ class SurvivorSystem {
             console.log('Seeds loaded with commitment:', this.seeds.commitment);
         } catch (error) {
             console.error('Could not load seeds:', error);
+            this.showDebugMessage('⚠️ Failed to load seeds.json: ' + error.message);
         }
     }
 
@@ -62,6 +71,7 @@ class SurvivorSystem {
             
             if (error) {
                 console.error('Database error:', error);
+                this.showDebugMessage('⚠️ Database error: ' + (error.message || JSON.stringify(error)));
                 return;
             }
 
@@ -70,8 +80,11 @@ class SurvivorSystem {
             // Check if data exists before processing
             if (!data || data.length === 0) {
                 console.log('No results found in database');
+                this.showDebugMessage('⚠️ No results found in database. Database returned empty.');
                 return;
             }
+
+            this.showDebugMessage(`✓ Loaded ${data.length} weeks from database`);
 
             // Convert database results to our results format
             data.forEach(row => {
