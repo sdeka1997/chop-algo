@@ -6,10 +6,10 @@ const SUPABASE_URL = 'https://fryzvuftyimdagfahdjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZyeXp2dWZ0eWltZGFnZmFoZGp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcyMDExNjAsImV4cCI6MjA3Mjc3NzE2MH0.QFjKIfxlzLv9R-zLdXm1mM7H_BzZmBNJ3EXZJ52sEB4';
 
 // Initialize Supabase client (wait for CDN to load)
-let supabase;
+let supabaseClient;
 function initSupabase() {
     if (window.supabase && window.supabase.createClient) {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         return true;
     }
     return false;
@@ -55,7 +55,7 @@ class SurvivorSystem {
 
     async loadResults() {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('results')
                 .select('*')
                 .order('week');
@@ -108,7 +108,7 @@ class SurvivorSystem {
             
             console.log('Attempting to save:', data);
             
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('results')
                 .insert([data]);
             
