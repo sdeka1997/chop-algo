@@ -76,17 +76,26 @@ class SurvivorSystem {
             // Convert database results to our results format
             data.forEach(row => {
                 const weekIndex = row.week - 1;
+                const baseSeed = this.seeds?.weeks?.[row.week] || '';
+
+                // Support both old (LOWEST_SCORE) and new (MNF_TOTAL) format
+                const mnfScore = row.mnf_score;
+                const fullSeed = mnfScore
+                    ? `${baseSeed}_MNF_TOTAL_${mnfScore}`
+                    : `${baseSeed}_LOWEST_SCORE_${row.lowest_score}`; // Backwards compatibility
+
                 this.results[weekIndex] = {
                     week: row.week,
-                    baseSeed: this.seeds?.weeks?.[row.week] || '',
+                    baseSeed,
                     lowestScore: row.lowest_score,
                     lowestScorer: row.lowest_scorer,
-                    fullSeed: `${this.seeds?.weeks?.[row.week] || ''}_LOWEST_SCORE_${row.lowest_score}`,
+                    mnfScore: mnfScore,
+                    fullSeed,
                     isSafe: row.is_safe,
                     revealed: true,
                     revealDate: row.revealed_at
                 };
-                
+
                 if (row.is_safe) {
                     this.safesUsed++;
                 }
@@ -102,16 +111,17 @@ class SurvivorSystem {
                 week: weekResult.week,
                 lowest_score: weekResult.lowestScore,
                 lowest_scorer: weekResult.lowestScorer,
+                mnf_score: weekResult.mnfScore,  // NEW: Store MNF total score
                 is_safe: weekResult.isSafe,
                 revealed_at: new Date().toISOString()
             };
-            
+
             console.log('Attempting to save:', data);
-            
+
             const { error } = await supabaseClient
                 .from('results')
                 .insert([data]);
-            
+
             if (error) {
                 console.error('Insert failed:', error);
             } else {
@@ -236,15 +246,25 @@ class SurvivorSystem {
     }
 
     async autoRevealWeek(week) {
-        const lowestData = await this.getLowestScorerForWeek(week);
+        // Get both MNF score (for randomness) and lowest scorer (for elimination)
+        const [mnfData, lowestData] = await Promise.all([
+            this.getMNFScoreForWeek(week),
+            this.getLowestScorerForWeek(week)
+        ]);
+
+        if (!mnfData) {
+            console.error(`Could not get MNF score for week ${week}`);
+            return;
+        }
+
         if (!lowestData) {
             console.error(`Could not get lowest scorer data for week ${week}`);
             return;
         }
 
-        const result = await this.revealWeek(week, lowestData.score, lowestData.team);
+        const result = await this.revealWeek(week, lowestData.score, lowestData.team, mnfData.totalScore);
         if (result) {
-            console.log(`Week ${week} automatically revealed: ${result.isSafe ? 'SAFE' : 'CHOP'}`);
+            console.log(`Week ${week} revealed: ${result.isSafe ? 'SAFE' : 'CHOP'} (MNF: ${mnfData.totalScore} pts)`);
             this.renderTable();
             this.updateStats();
         }
@@ -300,25 +320,92 @@ class SurvivorSystem {
         };
     }
 
+    // Get MNF game score from ESPN API
+    async getMNFScoreForWeek(week) {
+        try {
+            // Get the Monday date for this NFL week
+            // Week 1 MNF is Sept 8, 2025
+            const weekDates = [
+                '20250908', // Week 1
+                '20250915', // Week 2
+                '20250922', // Week 3
+                '20250929', // Week 4
+                '20251006', // Week 5
+                '20251013', // Week 6
+                '20251020', // Week 7
+                '20251027', // Week 8
+                '20251103', // Week 9
+                '20251110', // Week 10
+                '20251117', // Week 11
+                '20251124', // Week 12
+                '20251201', // Week 13
+                '20251208', // Week 14
+                '20251215', // Week 15
+                '20251222', // Week 16
+                '20251229'  // Week 17
+            ];
+
+            const date = weekDates[week - 1];
+            const espnUrl = `http://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${date}`;
+
+            console.log(`Fetching MNF score for week ${week} from ESPN...`);
+            const response = await fetch(espnUrl);
+            const data = await response.json();
+
+            // Find the MNF game (usually the last completed game on Monday)
+            const mnfGame = data.events?.find(event => {
+                const status = event.competitions?.[0]?.status;
+                return status?.type?.completed === true;
+            });
+
+            if (!mnfGame) {
+                console.error('MNF game not found or not completed');
+                return null;
+            }
+
+            const competitors = mnfGame.competitions[0].competitors;
+            const homeScore = parseInt(competitors[0].score);
+            const awayScore = parseInt(competitors[1].score);
+            const totalScore = homeScore + awayScore;
+
+            const homeTeam = competitors[0].team.displayName;
+            const awayTeam = competitors[1].team.displayName;
+
+            console.log(`MNF: ${awayTeam} ${awayScore} - ${homeTeam} ${homeScore} (Total: ${totalScore})`);
+
+            return {
+                totalScore,
+                homeTeam,
+                awayTeam,
+                homeScore,
+                awayScore
+            };
+        } catch (error) {
+            console.error('Error fetching MNF score:', error);
+            return null;
+        }
+    }
+
     // Manual reveal only - no automatic timing
     shouldRevealWeek(week) {
         // Only manual reveals via the input system
         return false;
     }
 
-    async revealWeek(week, lowestScore, lowestScorer) {
+    async revealWeek(week, lowestScore, lowestScorer, mnfScore) {
         if (!this.seeds || !this.seeds.weeks[week]) return null;
 
-        // Append lowest score to seed for unpredictability
+        // Use MNF total score for unpredictable randomness (manipulation-proof)
         const baseSeed = this.seeds.weeks[week];
-        const fullSeed = `${baseSeed}_LOWEST_SCORE_${lowestScore}`;
+        const fullSeed = `${baseSeed}_MNF_TOTAL_${mnfScore}`;
         const result = await this.calculateWeekResult(week, fullSeed);
-        
+
         const weekResult = {
             week,
             baseSeed,
-            lowestScore,
-            lowestScorer,
+            lowestScore,      // Still track for elimination
+            lowestScorer,     // Still track for elimination
+            mnfScore,         // NEW: MNF total score
             fullSeed,
             isSafe: result.isSafe,
             revealed: true,
@@ -326,14 +413,14 @@ class SurvivorSystem {
         };
 
         this.results[week - 1] = weekResult;
-        
+
         if (result.isSafe) {
             this.safesUsed++;
         }
 
         // Save result to database
         await this.saveResult(weekResult);
-        
+
         return weekResult;
     }
 
@@ -377,6 +464,7 @@ class SurvivorSystem {
                         <td>${week}</td>
                         <td>-</td>
                         <td>-</td>
+                        <td>-</td>
                         <td class="${week17IsSafe ? 'safe' : 'chop'}">${week17IsSafe ? 'SAFE' : 'CHOP'}</td>
                     `;
                 } else {
@@ -386,11 +474,14 @@ class SurvivorSystem {
                         <td class="unknown">?</td>
                         <td class="unknown">?</td>
                         <td class="unknown">?</td>
+                        <td class="unknown">?</td>
                     `;
                 }
             } else if (result && result.revealed) {
+                const mnfDisplay = result.mnfScore || '-';
                 row.innerHTML = `
                     <td>${week}</td>
+                    <td>${mnfDisplay}</td>
                     <td>${result.lowestScore}</td>
                     <td>${result.lowestScorer || ''}</td>
                     <td class="${result.isSafe ? 'safe' : 'chop'}">${result.isSafe ? 'SAFE' : 'CHOP'}</td>
@@ -405,6 +496,7 @@ class SurvivorSystem {
                         <td>${week}</td>
                         <td class="unknown">?</td>
                         <td class="unknown">?</td>
+                        <td class="unknown">?</td>
                         <td class="unknown">
                             <button onclick="revealWeekFromSleeper(${week})" class="inline-submit">Reveal</button>
                         </td>
@@ -412,6 +504,7 @@ class SurvivorSystem {
                 } else {
                     row.innerHTML = `
                         <td>${week}</td>
+                        <td class="unknown">?</td>
                         <td class="unknown">?</td>
                         <td class="unknown">?</td>
                         <td class="unknown">?</td>

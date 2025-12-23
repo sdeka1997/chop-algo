@@ -23,6 +23,7 @@
                     <thead>
                         <tr>
                             <th>Week</th>
+                            <th>MNF Score</th>
                             <th>Lowest Score</th>
                             <th>Lowest Scorer</th>
                             <th>Status</th>
@@ -40,15 +41,15 @@
             <div class="info-grid">
                 <div class="info-card">
                     <h4>Progressive Draw</h4>
-                    <p>Each week, we use the official MNF kickoff time as a seed. The probability of SAFE decreases as weeks pass and safes are used.</p>
+                    <p>Each week uses Monday Night Football's total score for unpredictable randomness. The probability of SAFE decreases as weeks pass and safes are used.</p>
                 </div>
                 <div class="info-card">
-                    <h4>Verifiable</h4>
-                    <p>All seeds are published upfront with SHA-256 commitment. Anyone can verify results using the same algorithm.</p>
+                    <h4>Manipulation-Proof</h4>
+                    <p>MNF scores determine SAFE/CHOP status. Fantasy teams cannot manipulate NFL game outcomes, ensuring fair randomness.</p>
                 </div>
                 <div class="info-card">
                     <h4>Reveal</h4>
-                    <p>Results are revealed after inputting the lowest score of the week so that it can be appended to the seed.</p>
+                    <p>Results can be revealed after MNF ends. The lowest fantasy scorer gets eliminated on CHOP weeks.</p>
                 </div>
             </div>
         </section>
@@ -83,11 +84,12 @@
             <div id="verification-details" class="hidden">
                 <h4>Verification Steps:</h4>
                 <ol>
-                    <li>Take the seed string for the week</li>
+                    <li>Take the seed string for the week and append MNF total score (e.g., "seed_MNF_TOTAL_51")</li>
                     <li>Calculate SHA-256 hash</li>
                     <li>Convert hash to 256-bit integer</li>
                     <li>Calculate threshold: (remaining_safes × 2^256) ÷ remaining_weeks</li>
                     <li>If hash < threshold → SAFE, otherwise CHOP</li>
+                    <li>The lowest fantasy scorer gets eliminated on CHOP weeks</li>
                 </ol>
             </div>
         </section>
