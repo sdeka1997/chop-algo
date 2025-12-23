@@ -3,7 +3,7 @@
   "description": "Fantasy Survivor League - Mystery SAFE Weeks Seeds",
   "commitment": "sha256:TO_BE_CALCULATED_FROM_ACTUAL_SEEDS",
   "algorithm": "Progressive draw with SHA-256 hashing",
-  "total_weeks": 16,
+  "total_weeks": 17,
   "total_safes": 5,
   "reveal_time": "Monday 8:00 PM ET",
   "championship_week": 17,
@@ -23,7 +23,8 @@
     "13": "MNF_2025_W13_8:15PM_ET_2025-12-01",
     "14": "MNF_2025_W14_8:15PM_ET_2025-12-08",
     "15": "MNF_2025_W15_8:15PM_ET_2025-12-15",
-    "16": "MNF_2025_W16_8:15PM_ET_2025-12-22"
+    "16": "MNF_2025_W16_8:15PM_ET_2025-12-22",
+    "17": "MNF_2025_W17_8:15PM_ET_2025-12-29"
   },
   "verification": {
     "instructions": "To verify any week's result: 1) Hash the seed with SHA-256, 2) Convert to 256-bit integer, 3) Calculate threshold = (remaining_safes * 2^256) / remaining_weeks, 4) If hash < threshold then SAFE, else CHOP",
